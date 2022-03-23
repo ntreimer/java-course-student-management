@@ -5,6 +5,8 @@ target/
 !**/src/test/**/target/
 mvnw
 mvnw.cmd
+.DS_Store
+.mvn/
 
 ### STS ###
 .apt_generated

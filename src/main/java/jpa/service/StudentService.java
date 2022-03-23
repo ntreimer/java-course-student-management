@@ -3,6 +3,7 @@ package jpa.service;
 import jpa.dao.StudentDAO;
 import jpa.entitymodels.Student;
 import jpa.entitymodels.Course;
+import org.hibernate.HibernateException;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.Transaction;
@@ -52,6 +53,7 @@ public class StudentService implements StudentDAO {
         session.close();
         factory.close();
 
+        // check if the student's entered password matches the one in the database
         if (student != null) {
             return student.getsPass().equals(sPassword);
         } else {
@@ -66,25 +68,37 @@ public class StudentService implements StudentDAO {
         SessionFactory factory = new Configuration().configure().buildSessionFactory();
         Session session = factory.openSession();
 
-        Transaction t = session.beginTransaction();
+        Transaction t = null;
+        try {
+            t = session.beginTransaction();
+            List<Course> courses = getStudentCourses(sEmail);
 
-        List<Course> courses = getStudentCourses(sEmail);
-        for (Course course : courses) {
-            if (course.getcId() == cId) {
-                return;
+            // check if student is already registered for course
+            for (Course course : courses) {
+                if (course.getcId() == cId) {
+                    return;
+                }
             }
+
+            // if student is not registered, add to the student_course table
+            String hql = "INSERT INTO student_course (student_email, course_id) " +
+                    "VALUES ( :emailParam, :courseParam)";
+
+            Query query = session.createSQLQuery(hql);
+            query.setParameter("emailParam", sEmail);
+            query.setParameter("courseParam", cId);
+            query.executeUpdate();
+
+            t.commit();
+        } catch (HibernateException e) {
+            if (t != null) {
+                t.rollback();
+            }
+            e.printStackTrace();
+        } finally {
+            session.close();
+            factory.close();
         }
-        String hql = "INSERT INTO student_course (student_email, course_id) " +
-                "VALUES ( :emailParam, :courseParam)";
-
-        Query query = session.createSQLQuery(hql);
-        query.setParameter("emailParam", sEmail);
-        query.setParameter("courseParam", cId);
-        query.executeUpdate();
-
-        t.commit();
-        session.close();
-        factory.close();
     }
 
 
@@ -93,6 +107,7 @@ public class StudentService implements StudentDAO {
         SessionFactory factory = new Configuration().configure().buildSessionFactory();
         Session session = factory.openSession();
 
+        // find courses where student email matches
         Query query = session.createQuery(
                 "SELECT c FROM Course c " +
                         "JOIN c.students " +
